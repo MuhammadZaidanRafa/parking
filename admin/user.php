@@ -1,407 +1,995 @@
 <?php
+
 session_start();
 require_once "../db.php";
 
-// Cek login dan role admin
+// ==================== CEK LOGIN ====================
+
 if (!isset($_SESSION['id_user'])) {
-    header("Location: login.php");
+    header("Location: ../login.php");
     exit;
 }
 
-if ($_SESSION['role'] != "admin") {
+// ==================== CEK ROLE ====================
+
+if ($_SESSION['role'] !== "admin") {
     die("Akses ditolak!");
 }
 
-// ==================== TAMBAH ====================
+$nama = $_SESSION['nama_lengkap'] ?? 'Admin';
+$role = $_SESSION['role'] ?? 'admin';
+
+// ==================== TAMBAH USER ====================
+
 if (isset($_POST['simpan'])) {
 
-    $nama = $_POST['nama'];
-    $username = $_POST['username'];
-    $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-    $role = $_POST['role'];
+    $nama_lengkap = trim($_POST['nama']);
+    $username     = trim($_POST['username']);
+    $password     = password_hash($_POST['password'], PASSWORD_DEFAULT);
+    $role_user    = $_POST['role'];
 
-    mysqli_query($conn,"INSERT INTO tb_user
-    (nama_lengkap,username,password,role,status_aktif)
-    VALUES
-    ('$nama','$username','$password','$role',1)");
+    $stmt = mysqli_prepare(
+        $conn,
+        "INSERT INTO tb_user
+        (nama_lengkap, username, password, role, status_aktif)
+        VALUES (?, ?, ?, ?, 1)"
+    );
+
+    mysqli_stmt_bind_param(
+        $stmt,
+        "ssss",
+        $nama_lengkap,
+        $username,
+        $password,
+        $role_user
+    );
+
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
 
     header("Location: user.php");
     exit;
 }
 
-// ==================== HAPUS ====================
-if(isset($_GET['hapus'])){
+// ==================== HAPUS USER ====================
 
-    $id = intval($_GET['hapus']);
+if (isset($_GET['hapus'])) {
 
-    mysqli_query($conn,"DELETE FROM tb_user WHERE id_user='$id'");
+    $id = (int) $_GET['hapus'];
 
-    header("Location:user.php");
+    $stmt = mysqli_prepare(
+        $conn,
+        "DELETE FROM tb_user WHERE id_user = ?"
+    );
+
+    mysqli_stmt_bind_param($stmt, "i", $id);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    header("Location: user.php");
     exit;
 }
 
-// ==================== UPDATE ====================
-if(isset($_POST['update'])){
+// ==================== UPDATE USER ====================
 
-    $id = $_POST['id'];
-    $nama = $_POST['nama'];
-    $username = $_POST['username'];
-    $role = $_POST['role'];
+if (isset($_POST['update'])) {
 
-    if($_POST['password']!=""){
+    $id           = (int) $_POST['id'];
+    $nama_lengkap = trim($_POST['nama']);
+    $username     = trim($_POST['username']);
+    $role_user    = $_POST['role'];
 
-        $password=password_hash($_POST['password'],PASSWORD_DEFAULT);
+    // Jika password diisi, password ikut diubah
+    if (!empty($_POST['password'])) {
 
-        mysqli_query($conn,"
-        UPDATE tb_user SET
+        $password = password_hash(
+            $_POST['password'],
+            PASSWORD_DEFAULT
+        );
 
-        nama_lengkap='$nama',
-        username='$username',
-        password='$password',
-        role='$role'
+        $stmt = mysqli_prepare(
+            $conn,
+            "UPDATE tb_user
+             SET nama_lengkap = ?,
+                 username = ?,
+                 password = ?,
+                 role = ?
+             WHERE id_user = ?"
+        );
 
-        WHERE id_user='$id'
-        ");
+        mysqli_stmt_bind_param(
+            $stmt,
+            "ssssi",
+            $nama_lengkap,
+            $username,
+            $password,
+            $role_user,
+            $id
+        );
 
-    }else{
+    } else {
 
-        mysqli_query($conn,"
-        UPDATE tb_user SET
+        // Password tidak diubah
+        $stmt = mysqli_prepare(
+            $conn,
+            "UPDATE tb_user
+             SET nama_lengkap = ?,
+                 username = ?,
+                 role = ?
+             WHERE id_user = ?"
+        );
 
-        nama_lengkap='$nama',
-        username='$username',
-        role='$role'
-
-        WHERE id_user='$id'
-        ");
-
+        mysqli_stmt_bind_param(
+            $stmt,
+            "sssi",
+            $nama_lengkap,
+            $username,
+            $role_user,
+            $id
+        );
     }
 
-    header("Location:user.php");
-    exit;
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
 
+    header("Location: user.php");
+    exit;
 }
+
 ?>
+
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
 
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Data User</title>
+<title>Kelola User - E-Parkir Admin</title>
 
 <style>
 
-*{
-margin:0;
-padding:0;
-box-sizing:border-box;
-font-family:Poppins,Arial;
+/* ================= RESET ================= */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
 }
 
-body{
-background:#f5f5f5;
-padding:20px;
+body {
+    background: #f4f6f9;
+    min-height: 100vh;
 }
 
-.container{
-max-width:1100px;
-margin:auto;
+/* ================= SIDEBAR ================= */
+
+.sidebar {
+    width: 250px;
+
+    background: #1e293b;
+    color: #fff;
+
+    display: flex;
+    flex-direction: column;
+
+    position: fixed;
+
+    top: 0;
+    bottom: 0;
+    left: 0;
+
+    z-index: 1000;
 }
 
-.card{
-background:#fff;
-padding:20px;
-border-radius:10px;
-box-shadow:0 5px 15px rgba(0,0,0,.1);
-margin-bottom:20px;
+/* BRAND */
+
+.sidebar .brand {
+    padding: 20px;
+
+    font-size: 20px;
+    font-weight: bold;
+
+    background: #0f172a;
+
+    border-bottom: 1px solid #334155;
+
+    text-align: center;
 }
 
-h2{
-margin-bottom:20px;
-color:#2563eb;
+/* USER INFO */
+
+.sidebar .user-info {
+    padding: 15px 20px;
+
+    background: #1e293b;
+
+    border-bottom: 1px solid #334155;
+
+    font-size: 13px;
+
+    color: #94a3b8;
 }
 
-input,select{
+.sidebar .user-info b {
+    color: #fff;
 
-width:100%;
-padding:10px;
-margin-top:5px;
-margin-bottom:15px;
+    display: block;
 
-border:1px solid #ccc;
-border-radius:5px;
+    font-size: 15px;
 
+    margin-top: 3px;
 }
 
-button{
+/* NAVIGATION */
 
-padding:10px 20px;
-background:#2563eb;
-color:white;
-border:none;
-border-radius:5px;
-cursor:pointer;
+.sidebar .nav-links {
+    list-style: none;
 
+    padding: 15px 0;
+
+    flex-grow: 1;
+
+    overflow-y: auto;
 }
 
-button:hover{
+.sidebar .nav-links li a {
+    display: flex;
 
-background:#1d4ed8;
+    align-items: center;
 
+    gap: 12px;
+
+    padding: 12px 20px;
+
+    color: #cbd5e1;
+
+    text-decoration: none;
+
+    font-size: 14px;
+
+    transition: .2s;
 }
 
-table{
+.sidebar .nav-links li a:hover,
+.sidebar .nav-links li a.active {
+    background: #007bff;
 
-width:100%;
-border-collapse:collapse;
-
+    color: #fff;
 }
 
-table th{
+/* LOGOUT */
 
-background:#2563eb;
-color:white;
+.sidebar .logout-container {
+    padding: 15px 20px;
 
-padding:10px;
-
+    border-top: 1px solid #334155;
 }
 
-table td{
+.sidebar .logout-btn {
+    display: block;
 
-padding:10px;
-border-bottom:1px solid #ddd;
+    width: 100%;
 
+    padding: 10px;
+
+    background: #dc3545;
+
+    color: white;
+
+    text-decoration: none;
+
+    text-align: center;
+
+    border-radius: 5px;
+
+    font-weight: bold;
+
+    transition: .2s;
 }
 
-.edit{
-
-background:orange;
-padding:6px 10px;
-text-decoration:none;
-color:white;
-border-radius:4px;
-
+.sidebar .logout-btn:hover {
+    background: #bd2130;
 }
 
-.hapus{
+/* ================= MAIN CONTENT ================= */
 
-background:red;
-padding:6px 10px;
-text-decoration:none;
-color:white;
-border-radius:4px;
+.main-content {
+    margin-left: 250px;
 
+    min-height: 100vh;
+
+    display: flex;
+    flex-direction: column;
 }
 
-.back{
+/* HEADER */
 
-display:inline-block;
-margin-bottom:20px;
-text-decoration:none;
-background:#333;
-color:white;
-padding:10px 15px;
-border-radius:5px;
+header {
+    background: #007bff;
 
+    color: white;
+
+    padding: 20px 30px;
+
+    box-shadow: 0 2px 5px rgba(0,0,0,.1);
 }
 
-@media(max-width:768px){
-
-table{
-display:block;
-overflow:auto;
-white-space:nowrap;
+header h2 {
+    margin-bottom: 5px;
 }
+
+/* ================= CONTAINER ================= */
+
+.container {
+    padding: 30px;
+
+    width: 100%;
+
+    max-width: 1200px;
+
+    margin: auto;
+}
+
+/* ================= CARD ================= */
+
+.card {
+    background: #fff;
+
+    padding: 20px;
+
+    border-radius: 10px;
+
+    box-shadow: 0 5px 15px rgba(0,0,0,.08);
+
+    margin-bottom: 25px;
+}
+
+.card h2 {
+    margin-bottom: 20px;
+
+    color: #2563eb;
+
+    font-size: 22px;
+}
+
+/* ================= FORM ================= */
+
+input,
+select {
+    width: 100%;
+
+    padding: 11px;
+
+    margin-top: 5px;
+
+    margin-bottom: 15px;
+
+    border: 1px solid #ccc;
+
+    border-radius: 5px;
+
+    font-size: 14px;
+
+    outline: none;
+}
+
+input:focus,
+select:focus {
+    border-color: #2563eb;
+
+    box-shadow: 0 0 0 2px rgba(37,99,235,.1);
+}
+
+button {
+    padding: 10px 20px;
+
+    background: #2563eb;
+
+    color: white;
+
+    border: none;
+
+    border-radius: 5px;
+
+    cursor: pointer;
+
+    font-weight: bold;
+
+    transition: .2s;
+}
+
+button:hover {
+    background: #1d4ed8;
+}
+
+/* ================= TABLE ================= */
+
+.table-wrapper {
+    width: 100%;
+
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+
+    border-collapse: collapse;
+
+    min-width: 700px;
+}
+
+table th {
+    background: #2563eb;
+
+    color: white;
+
+    padding: 12px;
+
+    text-align: left;
+}
+
+table td {
+    padding: 12px;
+
+    border-bottom: 1px solid #ddd;
+}
+
+table tr:hover td {
+    background: #f8fafc;
+}
+
+/* ================= ROLE ================= */
+
+.role-admin {
+    display: inline-block;
+
+    padding: 4px 9px;
+
+    background: #dbeafe;
+
+    color: #1d4ed8;
+
+    border-radius: 20px;
+
+    font-size: 12px;
+
+    font-weight: bold;
+}
+
+.role-petugas {
+    display: inline-block;
+
+    padding: 4px 9px;
+
+    background: #fef3c7;
+
+    color: #92400e;
+
+    border-radius: 20px;
+
+    font-size: 12px;
+
+    font-weight: bold;
+}
+
+.role-owner {
+    display: inline-block;
+
+    padding: 4px 9px;
+
+    background: #dcfce7;
+
+    color: #166534;
+
+    border-radius: 20px;
+
+    font-size: 12px;
+
+    font-weight: bold;
+}
+
+/* ================= STATUS ================= */
+
+.status-aktif {
+    color: #16a34a;
+
+    font-weight: bold;
+}
+
+.status-nonaktif {
+    color: #dc2626;
+
+    font-weight: bold;
+}
+
+/* ================= AKSI ================= */
+
+.edit {
+    display: inline-block;
+
+    background: #f59e0b;
+
+    padding: 6px 10px;
+
+    text-decoration: none;
+
+    color: white;
+
+    border-radius: 4px;
+
+    margin-right: 5px;
+
+    font-size: 13px;
+}
+
+.edit:hover {
+    background: #d97706;
+}
+
+.hapus {
+    display: inline-block;
+
+    background: #dc2626;
+
+    padding: 6px 10px;
+
+    text-decoration: none;
+
+    color: white;
+
+    border-radius: 4px;
+
+    font-size: 13px;
+}
+
+.hapus:hover {
+    background: #b91c1c;
+}
+
+/* ================= RESPONSIVE ================= */
+
+@media (max-width: 768px) {
+
+    .sidebar {
+        width: 100%;
+
+        position: relative;
+
+        height: auto;
+    }
+
+    .sidebar .nav-links {
+        max-height: 350px;
+    }
+
+    .main-content {
+        margin-left: 0;
+    }
+
+    header {
+        padding: 18px 20px;
+    }
+
+    .container {
+        padding: 20px 15px;
+    }
+
+    .card {
+        padding: 15px;
+    }
+
+    .card h2 {
+        font-size: 19px;
+    }
+
+    .sidebar .nav-links li a {
+        padding: 11px 20px;
+    }
 
 }
 
 </style>
 
 </head>
+
 <body>
 
-<div class="container">
+<!-- ================= SIDEBAR ================= -->
 
-<a href="../dashboard.php" class="back">
-← Dashboard
-</a>
+<aside class="sidebar">
 
-<div class="card">
+    <div class="brand">
+        🅿️ E-Parkir Admin
+    </div>
 
-<h2>Tambah User</h2>
+    <div class="user-info">
 
-<form method="POST">
+        Role:
+        <b><?= strtoupper(htmlspecialchars($role)); ?></b>
 
-<input
-type="text"
-name="nama"
-placeholder="Nama Lengkap"
-required>
+        User:
+        <b><?= htmlspecialchars($nama); ?></b>
 
-<input
-type="text"
-name="username"
-placeholder="Username"
-required>
+    </div>
 
-<input
-type="password"
-name="password"
-placeholder="Password"
-required>
+    <ul class="nav-links">
 
-<select name="role">
+        <li>
+            <a href="../dashboard.php">
+                <span>🏠</span>
+                Dashboard
+            </a>
+        </li>
 
-<option value="admin">Admin</option>
+        <li>
+            <a href="user.php" class="active">
+                <span>👤</span>
+                Kelola User
+            </a>
+        </li>
 
-<option value="petugas">Petugas</option>
+        <li>
+            <a href="tarif.php">
+                <span>💰</span>
+                Kelola Tarif
+            </a>
+        </li>
 
-<option value="owner">Owner</option>
+        <li>
+            <a href="transaksi.php">
+                <span>🎫</span>
+                Transaksi Parkir
+            </a>
+        </li>
 
-</select>
+        <li>
+            <a href="area.php">
+                <span>🅿️</span>
+                Area Parkir
+            </a>
+        </li>
 
-<button name="simpan">
-Simpan
-</button>
+        <li>
+            <a href="kendaraan.php">
+                <span>🚗</span>
+                Kelola Kendaraan
+            </a>
+        </li>
 
-</form>
+        <li>
+            <a href="log.php">
+                <span>📋</span>
+                Log Aktivitas
+            </a>
+        </li>
 
-</div>
+    </ul>
 
-<div class="card">
+    <div class="logout-container">
 
-<h2>Data User</h2>
+        <a href="../logout.php" class="logout-btn">
+            Logout
+        </a>
 
-<table>
+    </div>
 
-<tr>
+</aside>
 
-<th>No</th>
 
-<th>Nama</th>
+<!-- ================= MAIN CONTENT ================= -->
 
-<th>Username</th>
+<div class="main-content">
 
-<th>Role</th>
+    <header>
 
-<th>Status</th>
+        <h2>👤 Kelola User</h2>
 
-<th>Aksi</th>
+        <p>
+            Kelola pengguna sistem E-Parkir
+        </p>
 
-</tr>
+    </header>
 
-<?php
 
-$no=1;
+    <div class="container">
 
-$data=mysqli_query($conn,"SELECT * FROM tb_user ORDER BY id_user DESC");
 
-while($d=mysqli_fetch_array($data)){
+        <!-- ================= TAMBAH USER ================= -->
 
-?>
+        <div class="card">
 
-<tr>
+            <h2>Tambah User</h2>
 
-<td><?= $no++ ?></td>
+            <form method="POST">
 
-<td><?= htmlspecialchars($d['nama_lengkap']) ?></td>
+                <input
+                    type="text"
+                    name="nama"
+                    placeholder="Nama Lengkap"
+                    required
+                >
 
-<td><?= htmlspecialchars($d['username']) ?></td>
+                <input
+                    type="text"
+                    name="username"
+                    placeholder="Username"
+                    required
+                >
 
-<td><?= strtoupper($d['role']) ?></td>
+                <input
+                    type="password"
+                    name="password"
+                    placeholder="Password"
+                    required
+                >
 
-<td>
+                <select name="role" required>
 
-<?= $d['status_aktif']==1 ? "Aktif":"Nonaktif"; ?>
+                    <option value="admin">
+                        Admin
+                    </option>
 
-</td>
+                    <option value="petugas">
+                        Petugas
+                    </option>
 
-<td>
+                    <option value="owner">
+                        Owner
+                    </option>
 
-<a class="edit"
-href="?edit=<?= $d['id_user']; ?>">
-Edit
-</a>
+                </select>
 
-<a class="hapus"
-onclick="return confirm('Hapus user ini?')"
-href="?hapus=<?= $d['id_user']; ?>">
-Hapus
-</a>
+                <button
+                    type="submit"
+                    name="simpan"
+                >
+                    + Simpan User
+                </button>
 
-</td>
+            </form>
 
-</tr>
+        </div>
 
-<?php } ?>
 
-</table>
+        <!-- ================= DATA USER ================= -->
 
-</div>
+        <div class="card">
 
-<?php
+            <h2>Data User</h2>
 
-if(isset($_GET['edit'])){
+            <div class="table-wrapper">
 
-$id=$_GET['edit'];
+                <table>
 
-$e=mysqli_fetch_assoc(mysqli_query($conn,"SELECT * FROM tb_user WHERE id_user='$id'"));
+                    <tr>
 
-?>
+                        <th>No</th>
+                        <th>Nama</th>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
 
-<div class="card">
+                    </tr>
 
-<h2>Edit User</h2>
+                    <?php
 
-<form method="POST">
+                    $no = 1;
 
-<input
-type="hidden"
-name="id"
-value="<?= $e['id_user']; ?>">
+                    $data = mysqli_query(
+                        $conn,
+                        "SELECT * FROM tb_user
+                         ORDER BY id_user DESC"
+                    );
 
-<input
-type="text"
-name="nama"
-value="<?= htmlspecialchars($e['nama_lengkap']); ?>"
-required>
+                    while ($d = mysqli_fetch_assoc($data)):
 
-<input
-type="text"
-name="username"
-value="<?= htmlspecialchars($e['username']); ?>"
-required>
+                    ?>
 
-<input
-type="password"
-name="password"
-placeholder="Kosongkan jika tidak diubah">
+                    <tr>
 
-<select name="role">
+                        <td>
+                            <?= $no++; ?>
+                        </td>
 
-<option value="admin" <?= $e['role']=="admin"?"selected":"" ?>>Admin</option>
+                        <td>
+                            <?= htmlspecialchars($d['nama_lengkap']); ?>
+                        </td>
 
-<option value="petugas" <?= $e['role']=="petugas"?"selected":"" ?>>Petugas</option>
+                        <td>
+                            <?= htmlspecialchars($d['username']); ?>
+                        </td>
 
-<option value="owner" <?= $e['role']=="owner"?"selected":"" ?>>Owner</option>
+                        <td>
 
-</select>
+                            <?php if ($d['role'] === 'admin'): ?>
 
-<button name="update">
+                                <span class="role-admin">
+                                    ADMIN
+                                </span>
 
-Update
+                            <?php elseif ($d['role'] === 'petugas'): ?>
 
-</button>
+                                <span class="role-petugas">
+                                    PETUGAS
+                                </span>
 
-</form>
+                            <?php else: ?>
 
-</div>
+                                <span class="role-owner">
+                                    OWNER
+                                </span>
 
-<?php } ?>
+                            <?php endif; ?>
+
+                        </td>
+
+                        <td>
+
+                            <?php if ($d['status_aktif'] == 1): ?>
+
+                                <span class="status-aktif">
+                                    ● Aktif
+                                </span>
+
+                            <?php else: ?>
+
+                                <span class="status-nonaktif">
+                                    ● Nonaktif
+                                </span>
+
+                            <?php endif; ?>
+
+                        </td>
+
+                        <td>
+
+                            <a
+                                class="edit"
+                                href="?edit=<?= $d['id_user']; ?>"
+                            >
+                                Edit
+                            </a>
+
+                            <a
+                                class="hapus"
+                                onclick="return confirm('Hapus user ini?')"
+                                href="?hapus=<?= $d['id_user']; ?>"
+                            >
+                                Hapus
+                            </a>
+
+                        </td>
+
+                    </tr>
+
+                    <?php endwhile; ?>
+
+                </table>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================= EDIT USER ================= -->
+
+        <?php
+
+        if (isset($_GET['edit'])):
+
+            $id = (int) $_GET['edit'];
+
+            $result = mysqli_query(
+                $conn,
+                "SELECT * FROM tb_user
+                 WHERE id_user = $id"
+            );
+
+            $e = mysqli_fetch_assoc($result);
+
+            if ($e):
+
+        ?>
+
+        <div class="card">
+
+            <h2>✏️ Edit User</h2>
+
+            <form method="POST">
+
+                <input
+                    type="hidden"
+                    name="id"
+                    value="<?= $e['id_user']; ?>"
+                >
+
+                <input
+                    type="text"
+                    name="nama"
+                    value="<?= htmlspecialchars($e['nama_lengkap']); ?>"
+                    required
+                >
+
+                <input
+                    type="text"
+                    name="username"
+                    value="<?= htmlspecialchars($e['username']); ?>"
+                    required
+                >
+
+                <input
+                    type="password"
+                    name="password"
+                    placeholder="Kosongkan jika password tidak diubah"
+                >
+
+                <select name="role" required>
+
+                    <option
+                        value="admin"
+                        <?= $e['role'] == "admin" ? "selected" : ""; ?>
+                    >
+                        Admin
+                    </option>
+
+                    <option
+                        value="petugas"
+                        <?= $e['role'] == "petugas" ? "selected" : ""; ?>
+                    >
+                        Petugas
+                    </option>
+
+                    <option
+                        value="owner"
+                        <?= $e['role'] == "owner" ? "selected" : ""; ?>
+                    >
+                        Owner
+                    </option>
+
+                </select>
+
+                <button
+                    type="submit"
+                    name="update"
+                >
+                    Update User
+                </button>
+
+                <a
+                    href="user.php"
+                    style="
+                        display:inline-block;
+                        margin-left:8px;
+                        padding:10px 20px;
+                        background:#64748b;
+                        color:white;
+                        text-decoration:none;
+                        border-radius:5px;
+                    "
+                >
+                    Batal
+                </a>
+
+            </form>
+
+        </div>
+
+        <?php
+
+            endif;
+
+        endif;
+
+        ?>
+
+    </div>
 
 </div>
 
 </body>
+
 </html>

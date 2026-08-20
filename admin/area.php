@@ -1,242 +1,489 @@
 <?php
+
 session_start();
 require_once "../db.php";
 
+// ================= CEK LOGIN =================
 if (!isset($_SESSION['id_user'])) {
-    header("Location: login.php");
+    header("Location: ../login.php");
     exit;
 }
 
-if ($_SESSION['role'] != "admin") {
+// ================= CEK ROLE =================
+if ($_SESSION['role'] !== "admin") {
     die("Akses ditolak!");
 }
 
+$nama = $_SESSION['nama_lengkap'] ?? 'Admin';
+$role = $_SESSION['role'] ?? 'admin';
+
 // ================= TAMBAH =================
-if(isset($_POST['tambah'])){
+if (isset($_POST['tambah'])) {
 
-    $nama = $_POST['nama_area'];
-    $kapasitas = $_POST['kapasitas'];
+    $nama_area = trim($_POST['nama_area']);
+    $kapasitas = (int) $_POST['kapasitas'];
 
-    mysqli_query($conn,"
-    INSERT INTO tb_area_parkir
-    (nama_area,kapasitas,terisi)
-    VALUES
-    ('$nama','$kapasitas',0)
-    ");
+    $stmt = mysqli_prepare(
+        $conn,
+        "INSERT INTO tb_area_parkir (nama_area, kapasitas, terisi)
+         VALUES (?, ?, 0)"
+    );
+
+    mysqli_stmt_bind_param($stmt, "si", $nama_area, $kapasitas);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
 
     header("Location: area.php");
     exit;
 }
 
 // ================= HAPUS =================
-if(isset($_GET['hapus'])){
+if (isset($_GET['hapus'])) {
 
-    $id=(int)$_GET['hapus'];
+    $id = (int) $_GET['hapus'];
 
-    mysqli_query($conn,"
-    DELETE FROM tb_area_parkir
-    WHERE id_area='$id'
-    ");
+    $stmt = mysqli_prepare(
+        $conn,
+        "DELETE FROM tb_area_parkir WHERE id_area = ?"
+    );
+
+    mysqli_stmt_bind_param($stmt, "i", $id);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
 
     header("Location: area.php");
     exit;
 }
 
 // ================= UPDATE =================
-if(isset($_POST['update'])){
+if (isset($_POST['update'])) {
 
-    $id=$_POST['id'];
-    $nama=$_POST['nama_area'];
-    $kapasitas=$_POST['kapasitas'];
-    $terisi=$_POST['terisi'];
+    $id       = (int) $_POST['id'];
+    $nama_area = trim($_POST['nama_area']);
+    $kapasitas = (int) $_POST['kapasitas'];
+    $terisi    = (int) $_POST['terisi'];
 
-    mysqli_query($conn,"
-    UPDATE tb_area_parkir SET
+    $stmt = mysqli_prepare(
+        $conn,
+        "UPDATE tb_area_parkir
+         SET nama_area = ?, kapasitas = ?, terisi = ?
+         WHERE id_area = ?"
+    );
 
-    nama_area='$nama',
-    kapasitas='$kapasitas',
-    terisi='$terisi'
+    mysqli_stmt_bind_param(
+        $stmt,
+        "siii",
+        $nama_area,
+        $kapasitas,
+        $terisi,
+        $id
+    );
 
-    WHERE id_area='$id'
-    ");
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
 
     header("Location: area.php");
     exit;
-
 }
+
 ?>
 
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
 
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Area Parkir</title>
+<title>Area Parkir - E-Parkir Admin</title>
 
 <style>
 
-*{
-margin:0;
-padding:0;
-box-sizing:border-box;
-font-family:Poppins,Arial;
+/* ================= RESET ================= */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
 }
 
-body{
-background:#f4f6f9;
-padding:20px;
+body {
+    background: #f4f6f9;
+    min-height: 100vh;
 }
 
-.container{
-max-width:1100px;
-margin:auto;
+/* ================= SIDEBAR ================= */
+
+.sidebar {
+    width: 250px;
+    background: #1e293b;
+    color: #fff;
+
+    display: flex;
+    flex-direction: column;
+
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+
+    z-index: 1000;
 }
 
-.card{
+/* Brand */
 
-background:white;
+.sidebar .brand {
+    padding: 20px;
 
-padding:20px;
+    font-size: 20px;
+    font-weight: bold;
 
-border-radius:10px;
+    background: #0f172a;
 
-box-shadow:0 5px 15px rgba(0,0,0,.1);
+    border-bottom: 1px solid #334155;
 
-margin-bottom:20px;
-
+    text-align: center;
 }
 
-h2{
+/* User info */
 
-margin-bottom:20px;
+.sidebar .user-info {
+    padding: 15px 20px;
 
-color:#2563eb;
+    background: #1e293b;
 
+    border-bottom: 1px solid #334155;
+
+    font-size: 13px;
+
+    color: #94a3b8;
 }
 
-input{
+.sidebar .user-info b {
+    color: #fff;
 
-width:100%;
+    display: block;
 
-padding:10px;
+    font-size: 15px;
 
-margin-top:5px;
-
-margin-bottom:15px;
-
-border:1px solid #ccc;
-
-border-radius:5px;
-
+    margin-top: 3px;
 }
 
-button{
+/* Navigation */
 
-padding:10px 20px;
+.sidebar .nav-links {
+    list-style: none;
 
-background:#2563eb;
+    padding: 15px 0;
 
-color:white;
+    flex-grow: 1;
 
-border:none;
-
-border-radius:5px;
-
-cursor:pointer;
-
+    overflow-y: auto;
 }
 
-button:hover{
+.sidebar .nav-links li a {
+    display: flex;
 
-background:#1d4ed8;
+    align-items: center;
 
+    gap: 12px;
+
+    padding: 12px 20px;
+
+    color: #cbd5e1;
+
+    text-decoration: none;
+
+    font-size: 14px;
+
+    transition: 0.2s;
 }
 
-table{
+.sidebar .nav-links li a:hover,
+.sidebar .nav-links li a.active {
+    background: #007bff;
 
-width:100%;
-
-border-collapse:collapse;
-
+    color: #fff;
 }
 
-table th{
+/* Logout */
 
-background:#2563eb;
+.sidebar .logout-container {
+    padding: 15px 20px;
 
-color:white;
-
-padding:10px;
-
+    border-top: 1px solid #334155;
 }
 
-table td{
+.sidebar .logout-btn {
+    display: block;
 
-padding:10px;
+    width: 100%;
 
-border-bottom:1px solid #ddd;
+    padding: 10px;
 
+    background: #dc3545;
+
+    color: white;
+
+    text-decoration: none;
+
+    text-align: center;
+
+    border-radius: 5px;
+
+    font-weight: bold;
+
+    transition: 0.2s;
 }
 
-.edit{
-
-background:orange;
-
-color:white;
-
-padding:6px 10px;
-
-text-decoration:none;
-
-border-radius:4px;
-
+.sidebar .logout-btn:hover {
+    background: #bd2130;
 }
 
-.hapus{
+/* ================= MAIN CONTENT ================= */
 
-background:red;
+.main-content {
+    margin-left: 250px;
 
-color:white;
+    min-height: 100vh;
 
-padding:6px 10px;
-
-text-decoration:none;
-
-border-radius:4px;
-
+    display: flex;
+    flex-direction: column;
 }
 
-.back{
+/* Header */
 
-display:inline-block;
+header {
+    background: #007bff;
 
-margin-bottom:20px;
+    color: white;
 
-background:#333;
+    padding: 20px 30px;
 
-color:white;
-
-padding:10px 15px;
-
-text-decoration:none;
-
-border-radius:5px;
-
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-@media(max-width:768px){
-
-table{
-
-display:block;
-
-overflow:auto;
-
-white-space:nowrap;
-
+header h2 {
+    margin-bottom: 5px;
 }
+
+/* Container */
+
+.container {
+    padding: 30px;
+
+    width: 100%;
+
+    max-width: 1200px;
+
+    margin: auto;
+}
+
+/* ================= CARD ================= */
+
+.card {
+    background: white;
+
+    padding: 20px;
+
+    border-radius: 10px;
+
+    box-shadow: 0 5px 15px rgba(0,0,0,.08);
+
+    margin-bottom: 25px;
+}
+
+.card h2 {
+    margin-bottom: 20px;
+
+    color: #2563eb;
+
+    font-size: 22px;
+}
+
+/* ================= FORM ================= */
+
+input {
+    width: 100%;
+
+    padding: 11px;
+
+    margin-top: 5px;
+
+    margin-bottom: 15px;
+
+    border: 1px solid #ccc;
+
+    border-radius: 5px;
+
+    font-size: 14px;
+
+    outline: none;
+}
+
+input:focus {
+    border-color: #2563eb;
+
+    box-shadow: 0 0 0 2px rgba(37,99,235,.1);
+}
+
+button {
+    padding: 10px 20px;
+
+    background: #2563eb;
+
+    color: white;
+
+    border: none;
+
+    border-radius: 5px;
+
+    cursor: pointer;
+
+    font-weight: bold;
+
+    transition: .2s;
+}
+
+button:hover {
+    background: #1d4ed8;
+}
+
+/* ================= TABLE ================= */
+
+.table-wrapper {
+    width: 100%;
+
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+
+    border-collapse: collapse;
+
+    min-width: 700px;
+}
+
+table th {
+    background: #2563eb;
+
+    color: white;
+
+    padding: 12px;
+
+    text-align: left;
+}
+
+table td {
+    padding: 12px;
+
+    border-bottom: 1px solid #ddd;
+}
+
+table tr:hover td {
+    background: #f8fafc;
+}
+
+/* ================= BUTTON AKSI ================= */
+
+.edit {
+    display: inline-block;
+
+    background: #f59e0b;
+
+    color: white;
+
+    padding: 6px 10px;
+
+    text-decoration: none;
+
+    border-radius: 4px;
+
+    margin-right: 5px;
+
+    font-size: 13px;
+}
+
+.edit:hover {
+    background: #d97706;
+}
+
+.hapus {
+    display: inline-block;
+
+    background: #dc2626;
+
+    color: white;
+
+    padding: 6px 10px;
+
+    text-decoration: none;
+
+    border-radius: 4px;
+
+    font-size: 13px;
+}
+
+.hapus:hover {
+    background: #b91c1c;
+}
+
+/* ================= STATUS ================= */
+
+.status-aman {
+    color: #16a34a;
+
+    font-weight: bold;
+}
+
+.status-penuh {
+    color: #dc2626;
+
+    font-weight: bold;
+}
+
+/* ================= RESPONSIVE ================= */
+
+@media (max-width: 768px) {
+
+    .sidebar {
+        width: 100%;
+
+        position: relative;
+
+        height: auto;
+    }
+
+    .sidebar .nav-links {
+        max-height: 350px;
+    }
+
+    .main-content {
+        margin-left: 0;
+    }
+
+    header {
+        padding: 18px 20px;
+    }
+
+    .container {
+        padding: 20px 15px;
+    }
+
+    .card {
+        padding: 15px;
+    }
+
+    .card h2 {
+        font-size: 19px;
+    }
+
+    .sidebar .nav-links li a {
+        padding: 11px 20px;
+    }
 
 }
 
@@ -246,175 +493,347 @@ white-space:nowrap;
 
 <body>
 
-<div class="container">
+<!-- ================= SIDEBAR ================= -->
 
-<a href="../dashboard.php" class="back">
-← Dashboard
-</a>
+<aside class="sidebar">
 
-<div class="card">
+    <div class="brand">
+        🅿️ E-Parkir Admin
+    </div>
 
-<h2>Tambah Area Parkir</h2>
+    <div class="user-info">
 
-<form method="POST">
+        Role:
+        <b><?= strtoupper(htmlspecialchars($role)); ?></b>
 
-<input
-type="text"
-name="nama_area"
-placeholder="Nama Area"
-required>
+        User:
+        <b><?= htmlspecialchars($nama); ?></b>
 
-<input
-type="number"
-name="kapasitas"
-placeholder="Kapasitas"
-required>
+    </div>
 
-<button
-name="tambah">
+    <ul class="nav-links">
 
-Simpan
+        <li>
+            <a href="../dashboard.php">
+                <span>🏠</span>
+                Dashboard
+            </a>
+        </li>
 
-</button>
+        <li>
+            <a href="user.php">
+                <span>👤</span>
+                Kelola User
+            </a>
+        </li>
 
-</form>
+        <li>
+            <a href="tarif.php">
+                <span>💰</span>
+                Kelola Tarif
+            </a>
+        </li>
 
-</div>
+        <li>
+            <a href="transaksi.php">
+                <span>🎫</span>
+                Transaksi Parkir
+            </a>
+        </li>
 
-<div class="card">
+        <li>
+            <a href="area.php" class="active">
+                <span>🅿️</span>
+                Area Parkir
+            </a>
+        </li>
 
-<h2>Data Area Parkir</h2>
+        <li>
+            <a href="kendaraan.php">
+                <span>🚗</span>
+                Kelola Kendaraan
+            </a>
+        </li>
 
-<table>
+        <li>
+            <a href="log.php">
+                <span>📋</span>
+                Log Aktivitas
+            </a>
+        </li>
 
-<tr>
+    </ul>
 
-<th>No</th>
+    <div class="logout-container">
 
-<th>Nama Area</th>
+        <a href="../logout.php" class="logout-btn">
+            Logout
+        </a>
 
-<th>Kapasitas</th>
+    </div>
 
-<th>Terisi</th>
+</aside>
 
-<th>Sisa</th>
 
-<th>Aksi</th>
+<!-- ================= KONTEN UTAMA ================= -->
 
-</tr>
+<div class="main-content">
 
-<?php
+    <header>
 
-$no=1;
+        <h2>🅿️ Area Parkir</h2>
 
-$data=mysqli_query($conn,"
-SELECT * FROM tb_area_parkir
-ORDER BY id_area DESC
-");
+        <p>
+            Kelola area dan kapasitas parkir
+        </p>
 
-while($d=mysqli_fetch_assoc($data)){
+    </header>
 
-$sisa=$d['kapasitas']-$d['terisi'];
 
-?>
+    <div class="container">
 
-<tr>
+        <!-- ================= TAMBAH AREA ================= -->
 
-<td><?= $no++; ?></td>
+        <div class="card">
 
-<td><?= htmlspecialchars($d['nama_area']); ?></td>
+            <h2>Tambah Area Parkir</h2>
 
-<td><?= $d['kapasitas']; ?></td>
+            <form method="POST">
 
-<td><?= $d['terisi']; ?></td>
+                <input
+                    type="text"
+                    name="nama_area"
+                    placeholder="Nama Area"
+                    required
+                >
 
-<td><?= $sisa; ?></td>
+                <input
+                    type="number"
+                    name="kapasitas"
+                    placeholder="Kapasitas"
+                    min="1"
+                    required
+                >
 
-<td>
+                <button type="submit" name="tambah">
+                    + Simpan Area
+                </button>
 
-<a
-class="edit"
-href="?edit=<?= $d['id_area']; ?>">
+            </form>
 
-Edit
+        </div>
 
-</a>
 
-<a
-class="hapus"
-href="?hapus=<?= $d['id_area']; ?>"
-onclick="return confirm('Hapus area ini?')">
+        <!-- ================= DATA AREA ================= -->
 
-Hapus
+        <div class="card">
 
-</a>
+            <h2>Data Area Parkir</h2>
 
-</td>
+            <div class="table-wrapper">
 
-</tr>
+                <table>
 
-<?php } ?>
+                    <tr>
 
-</table>
+                        <th>No</th>
 
-</div>
+                        <th>Nama Area</th>
 
-<?php
+                        <th>Kapasitas</th>
 
-if(isset($_GET['edit'])){
+                        <th>Terisi</th>
 
-$id=$_GET['edit'];
+                        <th>Sisa</th>
 
-$e=mysqli_fetch_assoc(mysqli_query($conn,"
-SELECT * FROM tb_area_parkir
-WHERE id_area='$id'
-"));
+                        <th>Status</th>
 
-?>
+                        <th>Aksi</th>
 
-<div class="card">
+                    </tr>
 
-<h2>Edit Area</h2>
+                    <?php
 
-<form method="POST">
+                    $no = 1;
 
-<input
-type="hidden"
-name="id"
-value="<?= $e['id_area']; ?>">
+                    $data = mysqli_query(
+                        $conn,
+                        "SELECT * FROM tb_area_parkir
+                         ORDER BY id_area DESC"
+                    );
 
-<input
-type="text"
-name="nama_area"
-value="<?= htmlspecialchars($e['nama_area']); ?>"
-required>
+                    while ($d = mysqli_fetch_assoc($data)):
 
-<input
-type="number"
-name="kapasitas"
-value="<?= $e['kapasitas']; ?>"
-required>
+                        $kapasitas = (int) $d['kapasitas'];
+                        $terisi = (int) $d['terisi'];
 
-<input
-type="number"
-name="terisi"
-value="<?= $e['terisi']; ?>"
-required>
+                        $sisa = $kapasitas - $terisi;
 
-<button
-name="update">
+                    ?>
 
-Update
+                    <tr>
 
-</button>
+                        <td>
+                            <?= $no++; ?>
+                        </td>
 
-</form>
+                        <td>
+                            <?= htmlspecialchars($d['nama_area']); ?>
+                        </td>
 
-</div>
+                        <td>
+                            <?= $kapasitas; ?>
+                        </td>
 
-<?php } ?>
+                        <td>
+                            <?= $terisi; ?>
+                        </td>
+
+                        <td>
+                            <?= $sisa; ?>
+                        </td>
+
+                        <td>
+
+                            <?php if ($sisa <= 0): ?>
+
+                                <span class="status-penuh">
+                                    PENUH
+                                </span>
+
+                            <?php else: ?>
+
+                                <span class="status-aman">
+                                    TERSEDIA
+                                </span>
+
+                            <?php endif; ?>
+
+                        </td>
+
+                        <td>
+
+                            <a
+                                class="edit"
+                                href="?edit=<?= $d['id_area']; ?>"
+                            >
+                                Edit
+                            </a>
+
+                            <a
+                                class="hapus"
+                                href="?hapus=<?= $d['id_area']; ?>"
+                                onclick="return confirm('Hapus area ini?')"
+                            >
+                                Hapus
+                            </a>
+
+                        </td>
+
+                    </tr>
+
+                    <?php endwhile; ?>
+
+                </table>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================= EDIT AREA ================= -->
+
+        <?php
+
+        if (isset($_GET['edit'])):
+
+            $id = (int) $_GET['edit'];
+
+            $result = mysqli_query(
+                $conn,
+                "SELECT * FROM tb_area_parkir
+                 WHERE id_area = $id"
+            );
+
+            $e = mysqli_fetch_assoc($result);
+
+            if ($e):
+
+        ?>
+
+        <div class="card">
+
+            <h2>✏️ Edit Area Parkir</h2>
+
+            <form method="POST">
+
+                <input
+                    type="hidden"
+                    name="id"
+                    value="<?= $e['id_area']; ?>"
+                >
+
+                <input
+                    type="text"
+                    name="nama_area"
+                    value="<?= htmlspecialchars($e['nama_area']); ?>"
+                    required
+                >
+
+                <input
+                    type="number"
+                    name="kapasitas"
+                    value="<?= $e['kapasitas']; ?>"
+                    min="1"
+                    required
+                >
+
+                <input
+                    type="number"
+                    name="terisi"
+                    value="<?= $e['terisi']; ?>"
+                    min="0"
+                    required
+                >
+
+                <button
+                    type="submit"
+                    name="update"
+                >
+                    Update Area
+                </button>
+
+                <a
+                    href="area.php"
+                    style="
+                        display:inline-block;
+                        margin-left:8px;
+                        padding:10px 20px;
+                        background:#64748b;
+                        color:white;
+                        text-decoration:none;
+                        border-radius:5px;
+                    "
+                >
+                    Batal
+                </a>
+
+            </form>
+
+        </div>
+
+        <?php
+
+            endif;
+
+        endif;
+
+        ?>
+
+    </div>
 
 </div>
 
 </body>
+
 </html>

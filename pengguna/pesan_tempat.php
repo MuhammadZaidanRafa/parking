@@ -1,37 +1,106 @@
 <?php
+
 session_start();
+
 require '../db.php';
+
+/* =====================================================
+   CEK LOGIN
+===================================================== */
 
 if (!isset($_SESSION['id_user'])) {
     header("Location: ../login_pengguna.php");
     exit;
 }
 
+/* =====================================================
+   CEK ROLE
+===================================================== */
+
+if (($_SESSION['role'] ?? '') !== 'pengguna') {
+    die("Akses ditolak.");
+}
+
+/* =====================================================
+   DATA USER
+===================================================== */
+
 $id_user = (int) $_SESSION['id_user'];
 
-// Ambil kendaraan milik user (id_user sudah di-cast ke int, aman dari SQL injection)
-$kendaraan = mysqli_query($conn, "SELECT * FROM tb_kendaraan WHERE id_user = $id_user");
+$nama = $_SESSION['nama_lengkap'] ?? 'Pengguna';
+$role = $_SESSION['role'] ?? 'pengguna';
+
+$nama = trim($nama);
+
+$inisial = !empty($nama)
+    ? strtoupper(substr($nama, 0, 1))
+    : 'P';
+
+
+/* =====================================================
+   AMBIL KENDARAAN MILIK USER
+===================================================== */
+
+$kendaraan = mysqli_query(
+    $conn,
+    "SELECT *
+     FROM tb_kendaraan
+     WHERE id_user = $id_user
+     ORDER BY id_kendaraan DESC"
+);
+
 if ($kendaraan === false) {
-    die("Query error: " . mysqli_error($conn));
+    die("Query kendaraan error: " . mysqli_error($conn));
 }
+
+/* Jumlah kendaraan user */
+
 $jumlah_kendaraan = mysqli_num_rows($kendaraan);
 
-// Ambil semua area parkir, urut berdasarkan nama
-$area = mysqli_query($conn, "SELECT * FROM tb_area_parkir ORDER BY nama_area");
+
+/* =====================================================
+   AMBIL SEMUA AREA PARKIR
+===================================================== */
+
+$area = mysqli_query(
+    $conn,
+    "SELECT *
+     FROM tb_area_parkir
+     ORDER BY nama_area ASC"
+);
+
 if ($area === false) {
-    die("Query error: " . mysqli_error($conn));
+    die("Query area parkir error: " . mysqli_error($conn));
 }
 
-// Tandai area yang sudah penuh (terisi >= kapasitas) supaya tidak bisa dipilih
+
+/* =====================================================
+   CEK KETERSEDIAAN AREA
+===================================================== */
+
 $daftar_area = [];
+
 $ada_area_tersedia = false;
+
 while ($a = mysqli_fetch_assoc($area)) {
-    $a['penuh'] = ((int) $a['terisi'] >= (int) $a['kapasitas']);
+
+    $terisi = (int) ($a['terisi'] ?? 0);
+    $kapasitas = (int) ($a['kapasitas'] ?? 0);
+
+    /*
+     * Area dianggap penuh jika:
+     * terisi >= kapasitas
+     */
+
+    $a['penuh'] = ($terisi >= $kapasitas);
+
     if (!$a['penuh']) {
         $ada_area_tersedia = true;
     }
+
     $daftar_area[] = $a;
 }
+
 ?>
 
 <!DOCTYPE html>
@@ -160,12 +229,468 @@ button:active{
     }
 
 }
+/* =====================================================
+   SIDEBAR
+===================================================== */
 
+* {
+    box-sizing: border-box;
+}
+
+.sidebar {
+    width: 260px;
+    background: #ffffff;
+    border-right: 1px solid #e5e7eb;
+
+    display: flex;
+    flex-direction: column;
+
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+
+    z-index: 1000;
+
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.05);
+
+    transition: transform 0.3s ease;
+}
+
+/* HEADER SIDEBAR */
+.sidebar-header {
+    background: #007bff;
+    color: #ffffff;
+    padding: 22px 20px;
+}
+
+.sidebar-header h2 {
+    font-size: 18px;
+    margin: 0 0 16px;
+}
+
+/* USER INFO */
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.avatar {
+    width: 42px;
+    height: 42px;
+
+    flex-shrink: 0;
+
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-weight: bold;
+    font-size: 18px;
+}
+
+.user-name {
+    margin: 0;
+    font-weight: bold;
+    font-size: 15px;
+    line-height: 1.3;
+}
+
+.user-role {
+    font-size: 12px;
+    opacity: 0.85;
+    letter-spacing: 0.5px;
+}
+
+/* MENU */
+.sidebar-menu {
+    flex: 1;
+    padding: 14px 0;
+    overflow-y: auto;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+
+    gap: 12px;
+
+    padding: 12px 20px;
+
+    color: #333;
+    text-decoration: none;
+
+    font-size: 15px;
+
+    border-left: 3px solid transparent;
+
+    transition: all 0.2s ease;
+}
+
+.nav-link .icon {
+    width: 22px;
+    text-align: center;
+    font-size: 18px;
+}
+
+.nav-link:hover,
+.nav-link.active {
+    background: #eaf2ff;
+    color: #007bff;
+    border-left-color: #007bff;
+}
+
+/* FOOTER */
+.sidebar-footer {
+    padding: 12px 0;
+    border-top: 1px solid #eeeeee;
+}
+
+/* LOGOUT */
+.logout-link:hover {
+    background: #fdeaea;
+    color: #dc3545;
+    border-left-color: #dc3545;
+}
+
+/* =====================================================
+   MAIN CONTENT
+===================================================== */
+
+.main-content {
+    margin-left: 260px;
+    min-height: 100vh;
+    transition: margin-left 0.3s ease;
+}
+
+/* =====================================================
+   TOPBAR
+===================================================== */
+
+.topbar {
+    background: #ffffff;
+
+    padding: 15px 25px;
+
+    display: flex;
+    align-items: center;
+
+    gap: 15px;
+
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+
+    position: sticky;
+    top: 0;
+
+    z-index: 500;
+}
+
+/* HAMBURGER */
+.hamburger {
+    display: none;
+
+    flex-direction: column;
+    justify-content: center;
+
+    gap: 5px;
+
+    width: 36px;
+    height: 36px;
+
+    background: none;
+    border: none;
+
+    cursor: pointer;
+    padding: 6px;
+}
+
+.hamburger span {
+    width: 100%;
+    height: 3px;
+
+    background: #333;
+
+    border-radius: 2px;
+}
+
+/* =====================================================
+   OVERLAY MOBILE
+===================================================== */
+
+.overlay {
+    display: none;
+
+    position: fixed;
+    inset: 0;
+
+    background: rgba(0, 0, 0, 0.4);
+
+    z-index: 900;
+}
+
+.overlay.active {
+    display: block;
+}
+
+/* =====================================================
+   RESPONSIVE
+===================================================== */
+
+@media (max-width: 992px) {
+
+    .sidebar {
+        transform: translateX(-100%);
+    }
+
+    .sidebar.active {
+        transform: translateX(0);
+    }
+
+    .main-content {
+        margin-left: 0;
+    }
+
+    .hamburger {
+        display: flex;
+    }
+}
+
+@media (max-width: 576px) {
+
+    .sidebar {
+        width: 85%;
+        max-width: 300px;
+    }
+
+    .topbar {
+        padding: 12px 15px;
+    }
+
+    .topbar h2 {
+        font-size: 16px;
+    }
+}
 </style>
 
 </head>
 
 <body>
+
+    <!-- =================================================
+         SIDEBAR
+    ================================================== -->
+
+    <aside class="sidebar" id="sidebar">
+
+
+        <!-- SIDEBAR HEADER -->
+
+        <div class="sidebar-header">
+
+            <h2>🅿️ Aplikasi Parkir</h2>
+
+
+            <div class="user-info">
+
+
+                <div class="avatar">
+
+                    <?= htmlspecialchars($inisial); ?>
+
+                </div>
+
+
+                <div>
+
+                    <p class="user-name">
+
+                        <?= htmlspecialchars($nama); ?>
+
+                    </p>
+
+
+                    <span class="user-role">
+
+                        <?= strtoupper(
+                            htmlspecialchars($role)
+                        ); ?>
+
+                    </span>
+
+                </div>
+
+
+            </div>
+
+        </div>
+
+
+
+        <!-- =================================================
+             MENU
+        ================================================== -->
+
+        <nav class="sidebar-menu">
+
+
+            <!-- DASHBOARD -->
+
+            <a
+                href="../dashboard_pengguna.php"
+                class="nav-link"
+            >
+
+                <span class="icon">
+                    📊
+                </span>
+
+                Dashboard
+
+            </a>
+
+
+
+            <!-- RIWAYAT -->
+
+            <a
+                href="riwayat.php"
+                class="nav-link"
+            >
+
+                <span class="icon">
+                    🕒
+                </span>
+
+                Riwayat Parkir
+
+            </a>
+
+
+
+            <!-- KENDARAAN AKTIF -->
+
+            <a
+                href="kendaraan_saya.php"
+                class="nav-link active"
+            >
+
+                <span class="icon">
+                    🚗
+                </span>
+
+                Kendaraan Saya
+
+            </a>
+
+
+
+            <!-- PESAN TEMPAT -->
+
+            <a
+                href="pesan_tempat.php"
+                class="nav-link"
+            >
+
+                <span class="icon">
+                    🅿️
+                </span>
+
+                Pesan Tempat
+
+            </a>
+
+
+
+            <!-- BANTUAN -->
+
+            <a
+                href="help.php"
+                class="nav-link"
+            >
+
+                <span class="icon">
+                    ❓
+                </span>
+
+                Bantuan
+
+            </a>
+
+
+
+            <!-- PROFIL -->
+
+            <a
+                href="profil.php"
+                class="nav-link"
+            >
+
+                <span class="icon">
+                    👤
+                </span>
+
+                Profil
+
+            </a>
+
+
+        </nav>
+
+
+
+        <!-- =================================================
+             FOOTER SIDEBAR
+        ================================================== -->
+
+        <div class="sidebar-footer">
+
+
+            <!-- LANDING PAGE -->
+
+            <a
+                href="../index.php"
+                class="nav-link"
+            >
+
+                <span class="icon">
+                    🏠
+                </span>
+
+                Landing Page
+
+            </a>
+
+
+
+            <!-- LOGOUT -->
+
+            <a
+                href="../logout.php"
+                class="nav-link logout-link"
+                onclick="
+                    return confirm(
+                        'Apakah Anda yakin ingin keluar?'
+                    );
+                "
+            >
+
+                <span class="icon">
+                    🚪
+                </span>
+
+                Logout
+
+            </a>
+
+
+        </div>
+
+
+    </aside>
 
 <div class="container">
 
